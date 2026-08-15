@@ -34,8 +34,14 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASS || "",
   database: process.env.DB_NAME || "studyhub",
+  port: process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
+  // Aiven (and most managed cloud MySQL providers) require SSL connections.
+  // rejectUnauthorized: true would need Aiven's CA certificate bundled in;
+  // for a student project, false keeps setup simple while still encrypting
+  // the connection -- fine here, but a production app would pin the real CA.
+  ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
 });
 
 // ---------------------------------------------------------------
