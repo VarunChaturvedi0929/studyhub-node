@@ -1,0 +1,30 @@
+<%- include('_header') %>
+
+<h2>Welcome back, <%= session.name %> 👋</h2>
+<p style="color:var(--text-muted); margin-bottom:20px;">
+    <%= user.department %> · Semester <%= user.semester %>
+</p>
+
+<div class="grid">
+    <div class="card">
+        <h3>📄 Resources Available</h3>
+        <p style="font-size:2rem; color:var(--primary); font-weight:700;"><%= resourceCount %></p>
+        <p style="color:var(--text-muted); font-size:0.85rem;">approved for your department</p>
+        <a href="/resources" class="btn" style="margin-top:10px;">Browse</a>
+    </div>
+
+    <div class="card">
+        <h3>✅ Study Progress</h3>
+        <p style="font-size:2rem; color:var(--primary); font-weight:700;"><%= percent %>%</p>
+        <div class="progress-bar-outer"><div class="progress-bar-inner" style="width:<%= percent %>%"></div></div>
+        <a href="/progress" class="btn" style="margin-top:10px;">Update Progress</a>
+    </div>
+
+    <div class="card">
+        <h3>🔥 Recent Activity</h3>
+        <p style="font-size:2rem; color:var(--primary); font-weight:700;"><%= streakCount %> days</p>
+        <p style="color:var(--text-muted); font-size:0.85rem;">studied in last 14 days</p>
+    </div>
+</div>
+
+<%- include('_footer') %>

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudyHub</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav class="navbar">
+    <a href="/dashboard" class="logo">📚 StudyHub</a>
+    <div class="nav-links">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/resources">Resources</a>
+        <a href="/upload">Upload</a>
+        <a href="/progress">Study Tracker</a>
+        <% if (session.role === 'admin') { %>
+            <a href="/admin">Admin Panel</a>
+        <% } %>
+        <a href="/logout">Logout</a>
+    </div>
+</nav>
+<main class="container">

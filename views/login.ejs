@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Login — StudyHub</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="form-box">
+    <h2>Login</h2>
+    <% if (registered) { %><p class="success">Account created! Please login.</p><% } %>
+    <% if (error) { %><p class="error"><%= error %></p><% } %>
+    <form method="POST" action="/login">
+        <label>Email</label>
+        <input type="email" name="email" required>
+        <label>Password</label>
+        <input type="password" name="password" required>
+        <button type="submit">Login</button>
+    </form>
+    <p style="margin-top:14px; font-size:0.9rem;">New here? <a href="/register">Create an account</a></p>
+</div>
+</body>
+</html>

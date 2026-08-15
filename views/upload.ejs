@@ -1,0 +1,46 @@
+<%- include('_header') %>
+
+<h2>Upload a Resource</h2>
+<div class="card" style="max-width:520px;">
+    <% if (error) { %><p class="error"><%= error %></p><% } %>
+    <% if (success) { %><p class="success"><%= success %></p><% } %>
+
+    <form method="POST" action="/upload" enctype="multipart/form-data">
+        <label>Title</label>
+        <input type="text" name="title" required placeholder="e.g. DBMS End Sem 2024">
+
+        <label>Type</label>
+        <select name="type" required>
+            <option value="question_paper">Question Paper</option>
+            <option value="notes">Notes</option>
+            <option value="syllabus">Syllabus</option>
+        </select>
+
+        <label>Department</label>
+        <select name="department" required>
+            <% ['CSE','ECE','ME','CE','EE'].forEach(d => { %>
+            <option value="<%= d %>"><%= d %></option>
+            <% }) %>
+        </select>
+
+        <label>Subject</label>
+        <input type="text" name="subject" required placeholder="e.g. Database Management Systems">
+
+        <label>Semester</label>
+        <select name="semester" required>
+            <% for (let i = 1; i <= 8; i++) { %>
+            <option value="<%= i %>">Semester <%= i %></option>
+            <% } %>
+        </select>
+
+        <label>Year</label>
+        <input type="number" name="year" required min="2015" max="2026" value="2026">
+
+        <label>File (PDF only, max 10MB)</label>
+        <input type="file" name="file" accept="application/pdf" required>
+
+        <button type="submit">Upload</button>
+    </form>
+</div>
+
+<%- include('_footer') %>

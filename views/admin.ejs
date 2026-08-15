@@ -1,0 +1,33 @@
+<%- include('_header') %>
+
+<h2>Admin Panel — Pending Approvals</h2>
+
+<div class="card">
+<table>
+    <thead>
+        <tr><th>Title</th><th>Type</th><th>Dept</th><th>Sem</th><th>Uploaded By</th><th>Preview</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+        <% if (pending.length === 0) { %>
+        <tr><td colspan="7">No pending uploads. All caught up! 🎉</td></tr>
+        <% } %>
+        <% pending.forEach(r => { %>
+        <tr>
+            <td><%= r.title %></td>
+            <td><%= r.type.replace('_', ' ') %></td>
+            <td><%= r.department %></td>
+            <td><%= r.semester %></td>
+            <td><%= r.uploader %></td>
+            <td><a href="/uploads/<%= r.file_path %>" target="_blank">View PDF</a></td>
+            <td>
+                <a href="/admin/action?action=approve&id=<%= r.id %>" class="btn" style="background:var(--success);">Approve</a>
+                <a href="/admin/action?action=reject&id=<%= r.id %>" class="btn" style="background:var(--danger);"
+                   onclick="return confirm('Reject and delete this file?');">Reject</a>
+            </td>
+        </tr>
+        <% }) %>
+    </tbody>
+</table>
+</div>
+
+<%- include('_footer') %>

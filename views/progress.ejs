@@ -1,0 +1,57 @@
+<%- include('_header') %>
+
+<h2>Study Tracker</h2>
+
+<div class="card">
+    <h3>🔥 Last 14 Days Activity</h3>
+    <div class="streak-grid">
+        <% streakGrid.forEach(cell => { %>
+        <div class="streak-cell <%= cell.active ? 'active' : '' %>" title="<%= cell.date %>"></div>
+        <% }) %>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Add a Topic to Track</h3>
+    <form method="POST" action="/progress" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <div style="flex:1; min-width:150px;">
+            <label>Subject</label>
+            <input type="text" name="subject" required placeholder="e.g. DBMS">
+        </div>
+        <div style="flex:1; min-width:150px;">
+            <label>Topic</label>
+            <input type="text" name="topic" required placeholder="e.g. Normalization">
+        </div>
+        <button type="submit" style="margin-bottom:14px;">Add</button>
+    </form>
+</div>
+
+<% Object.keys(grouped).forEach(subject => {
+    const topics = grouped[subject];
+    const completedCount = topics.filter(t => t.is_completed).length;
+    const pct = Math.round((completedCount / topics.length) * 100);
+%>
+<div class="card">
+    <h3><%= subject %></h3>
+    <div class="progress-bar-outer"><div class="progress-bar-inner" style="width:<%= pct %>%"></div></div>
+    <p style="color:var(--text-muted); font-size:0.85rem; margin:6px 0 14px;"><%= completedCount %>/<%= topics.length %> topics complete</p>
+
+    <% topics.forEach(t => { %>
+    <div class="topic-row">
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin:0;">
+            <input type="checkbox" class="topic-checkbox" data-id="<%= t.id %>"
+                   <%= t.is_completed ? 'checked' : '' %> style="width:auto; margin:0;">
+            <span style="<%= t.is_completed ? 'text-decoration:line-through; color:var(--text-muted);' : '' %>">
+                <%= t.topic %>
+            </span>
+        </label>
+    </div>
+    <% }) %>
+</div>
+<% }) %>
+
+<% if (Object.keys(grouped).length === 0) { %>
+<div class="card">No topics added yet. Add your first subject/topic above to start tracking.</div>
+<% } %>
+
+<%- include('_footer') %>

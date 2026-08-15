@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Register — StudyHub</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="form-box">
+    <h2>Create Account</h2>
+    <% if (error) { %><p class="error"><%= error %></p><% } %>
+    <form method="POST" action="/register">
+        <label>Full Name</label>
+        <input type="text" name="name" required>
+
+        <label>Email</label>
+        <input type="email" name="email" required>
+
+        <label>Password</label>
+        <input type="password" name="password" required minlength="6">
+
+        <label>Department</label>
+        <select name="department" required>
+            <option value="CSE">CSE</option>
+            <option value="ECE">ECE</option>
+            <option value="ME">Mechanical</option>
+            <option value="CE">Civil</option>
+            <option value="EE">Electrical</option>
+        </select>
+
+        <label>Semester</label>
+        <select name="semester" required>
+            <% for (let i = 1; i <= 8; i++) { %>
+            <option value="<%= i %>">Semester <%= i %></option>
+            <% } %>
+        </select>
+
+        <button type="submit">Register</button>
+    </form>
+    <p style="margin-top:14px; font-size:0.9rem;">Already have an account? <a href="/login">Login</a></p>
+</div>
+</body>
+</html>

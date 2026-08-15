@@ -1,0 +1,52 @@
+<%- include('_header') %>
+
+<h2>Browse Resources</h2>
+
+<form method="GET" action="/resources" class="filter-bar card">
+    <input type="text" name="search" placeholder="Search title/subject..." value="<%= search %>">
+    <select name="department">
+        <option value="">All Departments</option>
+        <% ['CSE','ECE','ME','CE','EE'].forEach(d => { %>
+        <option value="<%= d %>" <%= department === d ? 'selected' : '' %>><%= d %></option>
+        <% }) %>
+    </select>
+    <select name="type">
+        <option value="">All Types</option>
+        <option value="question_paper" <%= type === 'question_paper' ? 'selected' : '' %>>Question Paper</option>
+        <option value="notes" <%= type === 'notes' ? 'selected' : '' %>>Notes</option>
+        <option value="syllabus" <%= type === 'syllabus' ? 'selected' : '' %>>Syllabus</option>
+    </select>
+    <select name="semester">
+        <option value="">All Semesters</option>
+        <% for (let i = 1; i <= 8; i++) { %>
+        <option value="<%= i %>" <%= String(semester) === String(i) ? 'selected' : '' %>>Sem <%= i %></option>
+        <% } %>
+    </select>
+    <button type="submit">Filter</button>
+</form>
+
+<div class="card">
+<table>
+    <thead>
+        <tr><th>Title</th><th>Type</th><th>Dept</th><th>Sem</th><th>Year</th><th>Uploaded By</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+        <% if (resources.length === 0) { %>
+        <tr><td colspan="7">No resources found. Try changing filters or upload one!</td></tr>
+        <% } %>
+        <% resources.forEach(r => { %>
+        <tr>
+            <td><%= r.title %></td>
+            <td><%= r.type.replace('_', ' ') %></td>
+            <td><%= r.department %></td>
+            <td><%= r.semester %></td>
+            <td><%= r.year %></td>
+            <td><%= r.uploader %></td>
+            <td><a href="/uploads/<%= r.file_path %>" target="_blank" class="btn btn-outline">Download</a></td>
+        </tr>
+        <% }) %>
+    </tbody>
+</table>
+</div>
+
+<%- include('_footer') %>
