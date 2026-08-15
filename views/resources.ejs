@@ -6,7 +6,7 @@
     <input type="text" name="search" placeholder="Search title/subject..." value="<%= search %>">
     <select name="department">
         <option value="">All Departments</option>
-        <% ['CSE','ECE','ME','CE','EE'].forEach(d => { %>
+        <% ['CSE','ECE','ME','CE','EE','BCOM','BBA','BCA'].forEach(d => { %>
         <option value="<%= d %>" <%= department === d ? 'selected' : '' %>><%= d %></option>
         <% }) %>
     </select>
