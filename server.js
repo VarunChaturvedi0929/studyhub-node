@@ -11,6 +11,17 @@
  * Kept close to raw SQL so it's easy to explain in an interview and
  * mirrors the exact same "prepared statements prevent SQL injection"
  * answer used in the PHP/Flask versions.
+ *
+ * WHY the `ah()` wrapper around every async route?
+ * Express 4 does NOT automatically catch errors thrown inside an async
+ * route handler. If an `await`ed call rejects (a bad query, a dropped DB
+ * connection, a destructure of an empty result) and nothing catches it,
+ * Node treats it as an unhandled promise rejection -- and modern Node
+ * versions (v15+) TERMINATE THE ENTIRE PROCESS when that happens. On
+ * Render this looked like a mysterious crash-loop ("Exited with status
+ * 1", server restarts, works for a bit, crashes again). Wrapping every
+ * async handler in `ah()` forwards any error to Express's error-handling
+ * middleware instead of letting it escape and kill the whole server.
  */
 
 require("dotenv").config();
@@ -25,6 +36,10 @@ const fs = require("fs");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Wrap an async route handler so rejected promises go to next(err)
+// instead of crashing the process.
+const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 // ---------------------------------------------------------------
 // Database pool (a pool, not a single connection, so multiple
 // concurrent requests can each borrow a connection safely)
@@ -37,10 +52,6 @@ const pool = mysql.createPool({
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
-  // Aiven (and most managed cloud MySQL providers) require SSL connections.
-  // rejectUnauthorized: true would need Aiven's CA certificate bundled in;
-  // for a student project, false keeps setup simple while still encrypting
-  // the connection -- fine here, but a production app would pin the real CA.
   ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
 });
 
@@ -53,10 +64,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// IMPORTANT: session middleware must be registered BEFORE any route that
-// reads req.session (like the /uploads check below). Registering it after
-// meant req.session was undefined whenever a PDF was requested -- that was
-// the bug causing "Cannot read properties of undefined (reading 'userId')".
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "change_this_to_a_random_secret",
@@ -67,19 +74,17 @@ app.use(
 );
 
 app.use("/uploads", (req, res, next) => {
-  // Uploaded files require login, same as PHP's uploaded_file route
   if (!req.session.userId) return res.redirect("/login");
   next();
 }, express.static(path.join(__dirname, "uploads")));
 
-// Make session available in all EJS templates without passing it manually every time
 app.use((req, res, next) => {
   res.locals.session = req.session;
   next();
 });
 
 // ---------------------------------------------------------------
-// Auth middleware (equivalent to requireLogin()/requireAdmin())
+// Auth middleware
 // ---------------------------------------------------------------
 function loginRequired(req, res, next) {
   if (!req.session.userId) return res.redirect("/login");
@@ -105,7 +110,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === "application/pdf") cb(null, true);
     else cb(new Error("Only PDF files are allowed"));
@@ -119,7 +124,7 @@ app.get("/", (req, res) => res.render("index"));
 
 app.get("/register", (req, res) => res.render("register", { error: null }));
 
-app.post("/register", async (req, res) => {
+app.post("/register", ah(async (req, res) => {
   const { name, email, password, department, semester } = req.body;
 
   if (!name || !email || !password) {
@@ -131,7 +136,6 @@ app.post("/register", async (req, res) => {
     return res.render("register", { error: "Email already registered." });
   }
 
-  // bcrypt salts + hashes the password -- same role as PHP's password_hash()
   const hashed = await bcrypt.hash(password, 10);
   await pool.query(
     "INSERT INTO users (name, email, password, department, semester) VALUES (?,?,?,?,?)",
@@ -139,13 +143,13 @@ app.post("/register", async (req, res) => {
   );
 
   res.redirect("/login?registered=1");
-});
+}));
 
 app.get("/login", (req, res) =>
   res.render("login", { error: null, registered: req.query.registered })
 );
 
-app.post("/login", async (req, res) => {
+app.post("/login", ah(async (req, res) => {
   const { email, password } = req.body;
 
   const [rows] = await pool.query(
@@ -168,7 +172,7 @@ app.post("/login", async (req, res) => {
   req.session.name = user.name;
   req.session.role = user.role;
   res.redirect("/dashboard");
-});
+}));
 
 app.get("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
@@ -177,13 +181,22 @@ app.get("/logout", (req, res) => {
 // ---------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------
-app.get("/dashboard", loginRequired, async (req, res) => {
+app.get("/dashboard", loginRequired, ah(async (req, res) => {
   const userId = req.session.userId;
 
-  const [[user]] = await pool.query(
+  const [userRows] = await pool.query(
     "SELECT department, semester FROM users WHERE id = ?",
     [userId]
   );
+
+  // If the session points to a user_id that no longer exists in the DB
+  // (e.g. the row was deleted/recreated directly in the database), don't
+  // crash trying to destructure an empty result -- just log them out
+  // cleanly and send them back to login instead.
+  if (userRows.length === 0) {
+    return req.session.destroy(() => res.redirect("/login"));
+  }
+  const user = userRows[0];
 
   const [[{ total: resourceCount }]] = await pool.query(
     "SELECT COUNT(*) as total FROM resources WHERE department = ? AND status = 'approved'",
@@ -204,12 +217,12 @@ app.get("/dashboard", loginRequired, async (req, res) => {
   );
 
   res.render("dashboard", { user, resourceCount, percent, streakCount: streakDays.length });
-});
+}));
 
 // ---------------------------------------------------------------
 // Resources — browse & filter
 // ---------------------------------------------------------------
-app.get("/resources", loginRequired, async (req, res) => {
+app.get("/resources", loginRequired, ah(async (req, res) => {
   const { department = "", type = "", semester = "", search = "" } = req.query;
 
   let sql = `SELECT r.*, u.name as uploader FROM resources r
@@ -229,7 +242,7 @@ app.get("/resources", loginRequired, async (req, res) => {
   const [resources] = await pool.query(sql, params);
 
   res.render("resources", { resources, department, type, semester, search });
-});
+}));
 
 // ---------------------------------------------------------------
 // Upload
@@ -238,8 +251,8 @@ app.get("/upload", loginRequired, (req, res) =>
   res.render("upload", { error: null, success: null })
 );
 
-app.post("/upload", loginRequired, (req, res) => {
-  upload.single("file")(req, res, async (err) => {
+app.post("/upload", loginRequired, (req, res, next) => {
+  upload.single("file")(req, res, (err) => {
     if (err) {
       return res.render("upload", { error: err.message, success: null });
     }
@@ -249,52 +262,54 @@ app.post("/upload", loginRequired, (req, res) => {
 
     const { title, type, department, subject, semester, year } = req.body;
 
-    await pool.query(
+    pool.query(
       `INSERT INTO resources (title, type, department, subject, semester, year, file_path, uploaded_by)
        VALUES (?,?,?,?,?,?,?,?)`,
       [title, type, department, subject, semester, year, req.file.filename, req.session.userId]
-    );
-
-    res.render("upload", {
-      error: null,
-      success: "Uploaded! It will be visible once an admin approves it.",
-    });
+    )
+      .then(() => {
+        res.render("upload", {
+          error: null,
+          success: "Uploaded! It will be visible once an admin approves it.",
+        });
+      })
+      .catch(next);
   });
 });
 
 // ---------------------------------------------------------------
 // Admin panel
 // ---------------------------------------------------------------
-app.get("/admin", adminRequired, async (req, res) => {
+app.get("/admin", adminRequired, ah(async (req, res) => {
   const [pending] = await pool.query(
     `SELECT r.*, u.name as uploader FROM resources r
      JOIN users u ON r.uploaded_by = u.id
      WHERE r.status = 'pending' ORDER BY r.created_at ASC`
   );
   res.render("admin", { pending });
-});
+}));
 
-app.get("/admin/action", adminRequired, async (req, res) => {
+app.get("/admin/action", adminRequired, ah(async (req, res) => {
   const { action, id } = req.query;
 
   if (action === "approve") {
     await pool.query("UPDATE resources SET status = 'approved' WHERE id = ?", [id]);
   } else if (action === "reject") {
-    const [[row]] = await pool.query("SELECT file_path FROM resources WHERE id = ?", [id]);
-    if (row) {
-      const filePath = path.join(__dirname, "uploads", row.file_path);
+    const [rows] = await pool.query("SELECT file_path FROM resources WHERE id = ?", [id]);
+    if (rows.length > 0) {
+      const filePath = path.join(__dirname, "uploads", rows[0].file_path);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
     await pool.query("DELETE FROM resources WHERE id = ?", [id]);
   }
 
   res.redirect("/admin");
-});
+}));
 
 // ---------------------------------------------------------------
 // Study tracker
 // ---------------------------------------------------------------
-app.get("/progress", loginRequired, async (req, res) => {
+app.get("/progress", loginRequired, ah(async (req, res) => {
   const userId = req.session.userId;
 
   const [rows] = await pool.query(
@@ -326,9 +341,9 @@ app.get("/progress", loginRequired, async (req, res) => {
   }
 
   res.render("progress", { grouped, streakGrid });
-});
+}));
 
-app.post("/progress", loginRequired, async (req, res) => {
+app.post("/progress", loginRequired, ah(async (req, res) => {
   const { subject, topic } = req.body;
   if (subject && topic) {
     await pool.query(
@@ -337,22 +352,21 @@ app.post("/progress", loginRequired, async (req, res) => {
     );
   }
   res.redirect("/progress");
-});
+}));
 
-app.post("/toggle_topic", loginRequired, async (req, res) => {
+app.post("/toggle_topic", loginRequired, ah(async (req, res) => {
   const { id } = req.body;
   const userId = req.session.userId;
 
-  // Ownership check -- same defense as PHP/Flask versions: prevents
-  // toggling someone else's topic by guessing IDs
-  const [[row]] = await pool.query(
+  const [rows] = await pool.query(
     "SELECT is_completed FROM study_progress WHERE id = ? AND user_id = ?",
     [id, userId]
   );
 
-  if (!row) {
+  if (rows.length === 0) {
     return res.status(404).json({ success: false, message: "Topic not found" });
   }
+  const row = rows[0];
 
   const newStatus = row.is_completed ? 0 : 1;
   await pool.query("UPDATE study_progress SET is_completed = ? WHERE id = ?", [newStatus, id]);
@@ -365,6 +379,29 @@ app.post("/toggle_topic", loginRequired, async (req, res) => {
   );
 
   res.json({ success: true, is_completed: !!newStatus });
+}));
+
+// ---------------------------------------------------------------
+// Global error handler — catches anything forwarded by ah() or next(err).
+// This is what keeps one bad request from taking down the whole server.
+// Must be defined LAST, after all routes, and must have 4 arguments for
+// Express to recognize it as an error-handling middleware.
+// ---------------------------------------------------------------
+app.use((err, req, res, next) => {
+  console.error("Unhandled error on", req.method, req.path, ":", err);
+  if (res.headersSent) return next(err);
+  res.status(500).send(
+    "Something went wrong on our end. Please try again in a moment."
+  );
+});
+
+// Extra safety net: log and survive instead of crashing the whole process
+// on any error that somehow still slips through uncaught.
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled promise rejection:", err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
 });
 
 app.listen(PORT, () => console.log(`StudyHub running on http://localhost:${PORT}`));
